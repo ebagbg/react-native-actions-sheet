@@ -236,7 +236,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
       closing.current = false;
     }, [runPendingCloseNotify]);
     const draggableNodes = useRef<NodesRef>([]);
-    const layoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const layoutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [dimensions, setDimensions] = useState({
       width: -1,
       height: -1,

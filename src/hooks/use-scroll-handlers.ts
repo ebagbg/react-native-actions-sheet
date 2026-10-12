@@ -126,7 +126,7 @@ export function useScrollHandlers<T>(
     options,
     active,
   );
-  const timer = useRef<NodeJS.Timeout>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(null);
   const subscription = useRef<EventHandlerSubscription>(null);
   const onMeasure = useCallback(
     (x: number, y: number, w: number, h: number, px: number, py: number) => {

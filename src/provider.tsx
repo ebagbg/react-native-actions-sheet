@@ -149,7 +149,7 @@ const RenderSheet = ({id, context}: {id: string; context: string}) => {
   const [overrideProps, setOverrideProps] = useState<ActionSheetProps>(null);
   const [visible, setVisible] = useState(false);
   const ref = useRef<ActionSheetRef | null>(null);
-  const clearPayloadTimeoutRef = useRef<NodeJS.Timeout>(null);
+  const clearPayloadTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const Sheet = sheetsRegistry[id] || null;
   const visibleRef = useRef(false);
   visibleRef.current = visible;
