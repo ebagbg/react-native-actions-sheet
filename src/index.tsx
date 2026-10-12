@@ -153,7 +153,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     const panGestureRef = useRef<GestureType>(undefined);
     const closing = useRef(false);
     const draggableNodes = useRef<NodesRef>([]);
-    const layoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const layoutTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [dimensions, setDimensions] = useState({
       width: -1,
       height: -1,
