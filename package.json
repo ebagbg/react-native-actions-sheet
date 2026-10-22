@@ -96,6 +96,7 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "watch": "yarn tsc --watch",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "tsc",
+    "prepare": "npm run build"
   }
 }
