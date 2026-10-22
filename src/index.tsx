@@ -321,6 +321,30 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     const snapPointsSV = useSharedValue<number[]>(snapPoints);
     // Worklet scroll-arbitration state (experimentalWorkletGestures).
     const isRefreshingSV = useSharedValue(false);
+    // Drag state of the worklet pan gesture.
+    // activeKind: 0 = none/sheet, 1 = scrollable, 2 = gesture-blocking region.
+    // dragging: whether the sheet is currently being moved by the finger. The
+    // drag anchors to the sheet's actual position when it starts (dragBaseSheetY
+    // / dragBaseTranslationY), so a frame that briefly hands back to the
+    // scrollable (at the offset==0 boundary) freezes the sheet in place and the
+    // next frame resumes seamlessly instead of snapping back to fully-open.
+    // Each worklet gets its own copy of a captured plain object, so state that
+    // onBegin writes would never reach onChange, and the gesture is rebuilt on
+    // most renders, which must not reset a drag in progress. A shared value is
+    // shared by all of the worklets and outlives the rebuilds.
+    const dragContext = useSharedValue({
+      activeKind: 0,
+      activeIndex: -1,
+      hasRefresh: false,
+      refreshBoundaryY: 0,
+      dragging: false,
+      dragBaseSheetY: 0,
+      dragBaseTranslationY: 0,
+      // Whether this pan instance has claimed the gesture already. A handler
+      // that is mid-drag must not be failed by an extra finger landing in a
+      // blocking region.
+      activated: false,
+    });
     // Registry of gesture regions (scrollables + gesture-blocking views). The
     // worklet pan gesture measures these at gesture start to decide, per finger,
     // whether to drag the sheet, hand off to a scrollable, or stay put.
@@ -1426,25 +1450,6 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
       // Snapshot of the registry captured for this gesture instance. The memo
       // rebuilds whenever registryVersion changes so this stays current.
       const regions = gestureRegions.current.slice();
-      // activeKind: 0 = none/sheet, 1 = scrollable, 2 = gesture-blocking region.
-      // dragging: whether the sheet is currently being moved by the finger. The
-      // drag anchors to the sheet's actual position when it starts (dragBaseSheetY
-      // / dragBaseTranslationY), so a frame that briefly hands back to the
-      // scrollable (at the offset==0 boundary) freezes the sheet in place and the
-      // next frame resumes seamlessly instead of snapping back to fully-open.
-      const ctx = {
-        activeKind: 0,
-        activeIndex: -1,
-        hasRefresh: false,
-        refreshBoundaryY: 0,
-        dragging: false,
-        dragBaseSheetY: 0,
-        dragBaseTranslationY: 0,
-        // Whether this pan instance has claimed the gesture already. A handler
-        // that is mid-drag must not be failed by an extra finger landing in a
-        // blocking region.
-        activated: false,
-      };
 
       /**
        * Whether the point falls inside a gesture-blocking region
@@ -1481,6 +1486,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         // gesture to the child — the sheet cannot move, and the child works.
         .onTouchesDown((event, state) => {
           'worklet';
+          const ctx = dragContext.value;
           if (!gestureEnabled || ctx.activated) return;
           const touches = event.changedTouches;
           for (let i = 0; i < touches.length; i++) {
@@ -1493,14 +1499,17 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         })
         .onStart(() => {
           'worklet';
+          const ctx = dragContext.value;
           ctx.activated = true;
         })
         .onFinalize(() => {
           'worklet';
+          const ctx = dragContext.value;
           ctx.activated = false;
         })
         .onBegin(event => {
           'worklet';
+          const ctx = dragContext.value;
           ctx.activeKind = 0;
           ctx.activeIndex = -1;
           ctx.hasRefresh = false;
@@ -1544,6 +1553,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         })
         .onChange(event => {
           'worklet';
+          const ctx = dragContext.value;
           if (!gestureEnabled) return;
           // Gesture-blocking region: never move the sheet.
           if (ctx.activeKind === 2) {
@@ -1634,6 +1644,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         })
         .onEnd(event => {
           'worklet';
+          const ctx = dragContext.value;
           if (!gestureEnabled) return;
           ctx.dragging = false;
           isRefreshingSV.value = false;
