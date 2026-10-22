@@ -45,6 +45,11 @@ export function useSheetScrollable(
   const animatedRef = useAnimatedRef<any>();
   const scrollY = useSharedValue(0);
   const lockedOffsetY = useSharedValue(0);
+  // Whether onScroll is inside its own scrollTo. A scrollTo emits a scroll event
+  // synchronously, and while React Native ignores offset changes (a content size
+  // update during a drag) the list never reaches lockedOffsetY, so each nested
+  // event would scrollTo again until the native stack overflows.
+  const isPinning = useSharedValue(false);
   const idRef = useRef<number>(0);
   if (idRef.current === 0) idRef.current = nextRegionId();
 
@@ -106,7 +111,11 @@ export function useSheetScrollable(
         sheetTranslateY.value > sheetMinTranslate.value + 5 &&
         !sheetIsRefreshing?.value
       ) {
-        scrollTo(animatedRef, 0, lockedOffsetY.value, false);
+        if (!isPinning.value) {
+          isPinning.value = true;
+          scrollTo(animatedRef, 0, lockedOffsetY.value, false);
+          isPinning.value = false;
+        }
       } else {
         lockedOffsetY.value = event.contentOffset.y;
       }
