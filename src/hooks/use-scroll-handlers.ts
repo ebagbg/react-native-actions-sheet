@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
-  NativeMethods,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -152,7 +151,9 @@ export function useScrollHandlers<T>(
         (ref as HTMLDivElement).style.overflow = 'auto';
         onMeasure(rect.x, rect.y, rect.width, rect.height, rect.left, rect.top);
       } else {
-        (ref as NativeMethods)?.measure?.(onMeasure);
+        (ref as {measure?: (callback: typeof onMeasure) => void})?.measure?.(
+          onMeasure,
+        );
       }
     }, 100);
   }, [nodeRef, onMeasure]);

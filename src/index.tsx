@@ -166,7 +166,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     const id = useSheetIDContext();
     const sheetId = props.id || id;
     const panViewRef = useRef<View>(null);
-    const rootViewContainerRef = useRef<View>(null);
+    const rootViewContainerRef = useRef<React.ComponentRef<typeof View>>(null);
     const payload = useSheetPayload();
     const payloadRef = useRef<any>(undefined);
     payloadRef.current = payload;

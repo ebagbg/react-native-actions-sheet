@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   EmitterSubscription,
   Keyboard,
-  KeyboardEventListener,
+  KeyboardEvent,
   Platform
 } from 'react-native';
 
@@ -32,16 +32,22 @@ export function useKeyboard(enabled: boolean) {
     end: ScreenRect;
   }>(initialValue);
   const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
-  const handleKeyboardDidShow: KeyboardEventListener = React.useCallback(e => {
+  const handleKeyboardDidShow = React.useCallback((e: KeyboardEvent) => {
     if (pauseKeyboardHandler.current) return;
-    setCoordinates({start: e.startCoordinates, end: e.endCoordinates});
+    setCoordinates({
+      start: 'startCoordinates' in e ? e.startCoordinates : undefined,
+      end: e.endCoordinates,
+    });
     setKeyboardHeight(e.endCoordinates.height);
     setShown(true);
   }, []);
-  const handleKeyboardDidHide: KeyboardEventListener = React.useCallback(e => {
+  const handleKeyboardDidHide = React.useCallback((e?: KeyboardEvent) => {
     setShown(false);
     if (e) {
-      setCoordinates({start: e.startCoordinates, end: e.endCoordinates});
+      setCoordinates({
+        start: 'startCoordinates' in e ? e.startCoordinates : undefined,
+        end: e.endCoordinates,
+      });
     } else {
       setCoordinates(initialValue);
       setKeyboardHeight(0);
