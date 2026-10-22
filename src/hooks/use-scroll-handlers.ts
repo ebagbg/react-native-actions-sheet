@@ -105,15 +105,13 @@ export function useDraggable<T>(
  * @example
  * ```tsx
   const handlers = useScrollHandlers<RNScrollView>();
-  return <NativeViewGestureHandler
-    simultaneousHandlers={handlers.simultaneousHandlers}
-  >
+  const native = useNativeGesture({simultaneousWith: handlers.simultaneousWith});
+  return <GestureDetector gesture={native}>
   <ScrollableView
     {...handlers}
   >
   </ScrollableView>
-  
-  </NativeViewGestureHandler>
+  </GestureDetector>
  * ```
  */
 export function useScrollHandlers<T>(
@@ -186,7 +184,7 @@ export function useScrollHandlers<T>(
 
   return {
     ref: nodeRef,
-    simultaneousHandlers: [gestureContext.ref],
+    simultaneousWith: gestureContext.gesture,
     onScroll,
     scrollEventThrottle: 1,
     onLayout,

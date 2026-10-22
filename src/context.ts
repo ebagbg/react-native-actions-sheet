@@ -1,4 +1,5 @@
 import {createContext, createRef, RefObject, useContext} from 'react';
+import type {PanGesture} from 'react-native-gesture-handler';
 import type {AnimatedRef, SharedValue} from 'react-native-reanimated';
 import {actionSheetEventManager} from './eventmanager';
 
@@ -12,8 +13,11 @@ export type LayoutRect = {
   py: number;
 };
 
-export const PanGestureRefContext = createContext({
-  ref: createRef<any>(),
+export const PanGestureRefContext = createContext<{
+  gesture: PanGesture | undefined;
+  eventManager: typeof actionSheetEventManager;
+}>({
+  gesture: undefined,
   eventManager: actionSheetEventManager,
 });
 

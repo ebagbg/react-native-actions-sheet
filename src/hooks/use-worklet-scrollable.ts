@@ -124,7 +124,7 @@ export function useSheetScrollable(
     enabled,
     ref: animatedRef,
     onScroll,
-    simultaneousHandlers: [gestureContext.ref],
+    simultaneousWith: gestureContext.gesture,
     scrollEventThrottle: 16,
   };
 }

@@ -35,7 +35,7 @@ export function createSheetScrollable<T>(
         <AnimatedComponent
           {...props}
           ref={worklet.ref}
-          simultaneousHandlers={worklet.simultaneousHandlers}
+          simultaneousWith={worklet.simultaneousWith}
           scrollEventThrottle={worklet.scrollEventThrottle}
           onScroll={worklet.onScroll}
           bounces={false}
@@ -47,7 +47,7 @@ export function createSheetScrollable<T>(
       <RNGHComponent
         {...props}
         ref={handlers.ref}
-        simultaneousHandlers={handlers.simultaneousHandlers}
+        simultaneousWith={handlers.simultaneousWith}
         scrollEventThrottle={handlers.scrollEventThrottle}
         onScroll={(event: any) => {
           handlers.onScroll(event);

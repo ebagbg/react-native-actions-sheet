@@ -24,11 +24,11 @@ import {
   View,
 } from 'react-native';
 import {
-  Gesture,
   GestureDetector,
   GestureHandlerRootView,
-  GestureType,
-  PanGesture,
+  GestureStateManager,
+  PanGestureConfig,
+  usePanGesture,
 } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -95,6 +95,8 @@ const STATUS_BAR_REVEAL_DISTANCE = 64;
 // point to settle on. Higher = a flick carries further before snapping. Tuned to
 // feel like a native scroll-view fling.
 const VELOCITY_PROJECTION = 0.08;
+// The pan gesture on web, where PanResponder drives the sheet instead.
+const DISABLED_PAN_GESTURE_CONFIG: PanGestureConfig = {enabled: false};
 export default forwardRef<ActionSheetRef, ActionSheetProps>(
   function ActionSheet(
     {
@@ -178,7 +180,6 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     const hiding = useRef(false);
     const returnValueRef = useRef(returnValue);
     const sheetPayload = useSheetPayload();
-    const panGestureRef = useRef<GestureType>(undefined);
     const closing = useRef(false);
     // iOS only: the sheet tears down and animates away, but `onClose` and the
     // `SheetManager` promises must not run until the native Modal has actually
@@ -329,7 +330,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     // scrollable (at the offset==0 boundary) freezes the sheet in place and the
     // next frame resumes seamlessly instead of snapping back to fully-open.
     // Each worklet gets its own copy of a captured plain object, so state that
-    // onBegin writes would never reach onChange, and the gesture is rebuilt on
+    // onBegin writes would never reach onUpdate, and the gesture is rebuilt on
     // most renders, which must not reset a drag in progress. A shared value is
     // shared by all of the worklets and outlives the rebuilds.
     const dragContext = useSharedValue({
@@ -1401,7 +1402,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
               // them here the origin of the session's first touch (usually a list)
               // keeps deciding every later drag, so scrolling a list once would
               // leave the sheet hard to drag from anywhere for the rest of the
-              // session. Web only — native's Gesture.Pan path is untouched.
+              // session. Web only — native's pan gesture path is untouched.
               start = undefined;
               prevDeltaY = 0;
             },
@@ -1414,22 +1415,21 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
             },
             onPanResponderEnd: onEnd,
           })
-        : Gesture.Pan()
-            .withRef(panGestureRef)
-            .onChange(event =>
+        : ({
+            runOnJS: true,
+            activeOffsetY: [-5, 5],
+            failOffsetX: [-5, 5],
+            onUpdate: event =>
               onChange(event.absoluteX, event.absoluteY, event.translationY),
-            )
-            .runOnJS(true)
-            .activeOffsetY([-5, 5])
-            .failOffsetX([-5, 5])
-            // Passed wrapped, like `onChange` above: with the Worklets Babel
+            // Passed wrapped, like `onUpdate` above: with the Worklets Babel
             // plugin in bundle mode each callback is extracted into its own
             // worklet file and its closure serialized, and `onEnd` writes to
             // closure state that only exists on the JS side. Handing the
-            // function to `.onEnd` directly makes the extracted worklet *be*
-            // `onEnd`, which crashes there; a thin arrow wrapper keeps the real
-            // function on the JS thread (`runOnJS(true)` is set above).
-            .onEnd(() => onEnd());
+            // function to `onDeactivate` directly makes the extracted worklet
+            // *be* `onEnd`, which crashes there; a thin arrow wrapper keeps the
+            // real function on the JS thread (`runOnJS: true` is set above).
+            onDeactivate: () => onEnd(),
+          } satisfies PanGestureConfig);
     }, [gestureEnabled]);
 
     // Fully worklet-driven pan gesture. Per-frame drag and scroll<->drag
@@ -1475,8 +1475,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         return false;
       };
 
-      return Gesture.Pan()
-        .withRef(panGestureRef)
+      return {
         // A touch that begins inside a blocking region belongs to the view under
         // the finger (an inner ScrollView, slider, canvas, ...), not to the
         // sheet. Deciding that in `onBegin` is too late: once this pan activates,
@@ -1484,7 +1483,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         // scrolling and the sheet's behaviour depends on which of the two wins
         // the activation race. Failing the handler on touch-down hands the whole
         // gesture to the child — the sheet cannot move, and the child works.
-        .onTouchesDown((event, state) => {
+        onTouchesDown: event => {
           'worklet';
           const ctx = dragContext.value;
           if (!gestureEnabled || ctx.activated) return;
@@ -1492,22 +1491,22 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
           for (let i = 0; i < touches.length; i++) {
             const touch = touches[i];
             if (beginsInBlockingRegion(touch.absoluteX, touch.absoluteY)) {
-              state.fail();
+              GestureStateManager.fail(event.handlerTag);
               return;
             }
           }
-        })
-        .onStart(() => {
+        },
+        onActivate: () => {
           'worklet';
           const ctx = dragContext.value;
           ctx.activated = true;
-        })
-        .onFinalize(() => {
+        },
+        onFinalize: () => {
           'worklet';
           const ctx = dragContext.value;
           ctx.activated = false;
-        })
-        .onBegin(event => {
+        },
+        onBegin: event => {
           'worklet';
           const ctx = dragContext.value;
           ctx.activeKind = 0;
@@ -1550,8 +1549,8 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
             ctx.activeKind = 1;
             ctx.activeIndex = bestScrollIndex;
           }
-        })
-        .onChange(event => {
+        },
+        onUpdate: event => {
           'worklet';
           const ctx = dragContext.value;
           if (!gestureEnabled) return;
@@ -1641,8 +1640,8 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
           } else {
             translateY.value = translateYValue;
           }
-        })
-        .onEnd(event => {
+        },
+        onDeactivate: event => {
           'worklet';
           const ctx = dragContext.value;
           if (!gestureEnabled) return;
@@ -1680,9 +1679,10 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
             projected - lowestOffset > springOffsetC;
 
           runOnJS(handleGestureSettle)(bestIndex, shouldClose);
-        })
-        .activeOffsetY([-5, 5])
-        .failOffsetX([-5, 5]);
+        },
+        activeOffsetY: [-5, 5],
+        failOffsetX: [-5, 5],
+      } satisfies PanGestureConfig;
     }, [
       gestureEnabled,
       overdrawFactor,
@@ -1713,6 +1713,15 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     const useWorkletGestures =
       Platform.OS !== 'web' && !legacyGestures && experimentalWorkletGestures;
     const activeGesture = useWorkletGestures ? workletPanGesture : panGesture;
+    // Web always uses PanResponder (panHandlers spread on the View) — see the
+    // engine selection above. Native uses the pan gesture, whether it is running
+    // the worklet callbacks or the legacy ones.
+    const isPanResponderGesture = !useWorkletGestures && Platform.OS === 'web';
+    const sheetPanGesture = usePanGesture(
+      isPanResponderGesture
+        ? DISABLED_PAN_GESTURE_CONFIG
+        : (activeGesture as PanGestureConfig),
+    );
 
     const workletScrollContext = React.useMemo<WorkletScrollContextType>(
       () => ({
@@ -2002,10 +2011,10 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
 
     const context = React.useMemo(
       () => ({
-        ref: panGestureRef,
+        gesture: sheetPanGesture,
         eventManager: internalEventManager,
       }),
-      [internalEventManager],
+      [internalEventManager, sheetPanGesture],
     );
 
     // Backdrop opacity follows the sheet: full at any snap point, fading toward 0
@@ -2091,10 +2100,6 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
       };
     }, animatedStatusBarFillStyleDeps);
 
-    // Web always uses PanResponder (panHandlers spread on the View) — see the
-    // engine selection above. Native uses a GestureDetector, whether it is
-    // running the worklet pan gesture or the legacy one.
-    const isPanResponderGesture = !useWorkletGestures && Platform.OS === 'web';
     const GestureWrapper = isPanResponderGesture ? Fragment : GestureDetector;
 
     return (
@@ -2203,7 +2208,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
                             {...(isPanResponderGesture
                               ? ({} as any)
                               : {
-                                  gesture: activeGesture as PanGesture,
+                                  gesture: sheetPanGesture,
                                 })}>
                             <Animated.View
                               {...(isPanResponderGesture
