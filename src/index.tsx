@@ -341,6 +341,9 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
       dragging: false,
       dragBaseSheetY: 0,
       dragBaseTranslationY: 0,
+      // Whether this drag has scrolled the list of a fully open sheet. The list
+      // then stops at its top instead of handing the rest of the drag to the sheet.
+      listScrolled: false,
       // Whether this pan instance has claimed the gesture already. A handler
       // that is mid-drag must not be failed by an extra finger landing in a
       // blocking region.
@@ -1514,6 +1517,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
           ctx.hasRefresh = false;
           ctx.refreshBoundaryY = 0;
           ctx.dragging = false;
+          ctx.listScrolled = false;
 
           // Safety net for a region that only became measurable after touch-down
           // (`onTouchesDown` already failed the gesture for the normal case).
@@ -1568,12 +1572,19 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
           if (ctx.activeKind === 1 && enableInScrollC && !isRefreshingSV.value) {
             const region = regions[ctx.activeIndex];
             const nodeScrolling = (region?.scrollY?.value ?? 0) > 0;
+            // The list only scrolls while the sheet is fully open. Below that it is
+            // held in place, so a drag there moves the sheet even if the list is
+            // scrolled.
+            if (fullOpen && nodeScrolling) {
+              ctx.listScrolled = true;
+            }
             // Case 2: fully open + swiping up while list has room -> let it scroll.
             if (fullOpen && !swipingDown) {
               block = true;
             }
-            // Cases 3a/4a: swiping down while the list is still scrolled -> scroll.
-            else if (swipingDown && nodeScrolling) {
+            // Case 3a: swiping down while the fully open list is still scrolled, or
+            // after this drag scrolled it -> scroll.
+            else if (swipingDown && ctx.listScrolled) {
               block = true;
             }
             // Case 5: pull-to-refresh. Fully open, pulling down from the top of a
