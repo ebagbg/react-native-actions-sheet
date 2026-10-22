@@ -330,9 +330,10 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
     // scrollable (at the offset==0 boundary) freezes the sheet in place and the
     // next frame resumes seamlessly instead of snapping back to fully-open.
     // Each worklet gets its own copy of a captured plain object, so state that
-    // onBegin writes would never reach onUpdate, and the gesture is rebuilt on
-    // most renders, which must not reset a drag in progress. A shared value is
-    // shared by all of the worklets and outlives the rebuilds.
+    // onBegin writes would never reach onUpdate, and the gesture is rebuilt when
+    // its inputs change (a scrollable mounting mid-drag), which must not reset a
+    // drag in progress. A shared value is shared by all of the worklets and
+    // outlives the rebuilds.
     const dragContext = useSharedValue({
       activeKind: 0,
       activeIndex: -1,
@@ -1094,6 +1095,17 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
         moveSheetWithAnimation,
       ],
     );
+    // handleGestureSettle changes on most renders (the default
+    // openAnimationConfig and the keyboard state are new objects each time), so
+    // the pan gesture calls it through a stable function. Otherwise every render
+    // would rebuild the gesture and update its native config and relations.
+    const handleGestureSettleRef = useRef(handleGestureSettle);
+    handleGestureSettleRef.current = handleGestureSettle;
+    const settleGesture = useCallback(
+      (targetIndex: number, shouldClose: boolean) =>
+        handleGestureSettleRef.current(targetIndex, shouldClose),
+      [],
+    );
 
     const panGesture = React.useMemo(() => {
       let prevDeltaY = 0;
@@ -1689,7 +1701,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
             bestIndex === 0 &&
             projected - lowestOffset > springOffsetC;
 
-          runOnJS(handleGestureSettle)(bestIndex, shouldClose);
+          runOnJS(settleGesture)(bestIndex, shouldClose);
         },
         activeOffsetY: [-5, 5],
         failOffsetX: [-5, 5],
@@ -1703,7 +1715,7 @@ export default forwardRef<ActionSheetRef, ActionSheetProps>(
       disableDragBeyondMinimumSnapPoint,
       enableGesturesInScrollView,
       springOffset,
-      handleGestureSettle,
+      settleGesture,
       registryVersion,
     ]);
 
